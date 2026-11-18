@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Monitor Robot PLC</title>
+<style>
+  :root {
+    --bg: #f4f5f7; --card: #ffffff; --text: #1b1f24; --muted: #6b7280;
+    --border: #e2e5ea; --on: #16a34a; --off: #9ca3af;
+    --aksen: var(--on);   /* warna dominan halaman; berubah mengikuti warna yang dicari */
+    --tint: 0%;           /* seberapa kuat warna aksen mewarnai latar */
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #12151a; --card: #1b2028; --text: #e6e9ee; --muted: #9aa3b0;
+            --border: #2b323d; --on: #4ade80; --off: #6b7280; }
+  }
+  /* warna aksen per target warna (terang) */
+  body[data-warna="merah"]  { --aksen: #dc2626; }
+  body[data-warna="kuning"] { --aksen: #eab308; }
+  body[data-warna="hijau"]  { --aksen: #16a34a; }
+  body[data-warna="biru"]   { --aksen: #2563eb; }
+  body[data-warna="pink"]   { --aksen: #ec4899; }
+  @media (prefers-color-scheme: dark) {
+    body[data-warna="merah"]  { --aksen: #f87171; }
+    body[data-warna="kuning"] { --aksen: #facc15; }
+    body[data-warna="hijau"]  { --aksen: #4ade80; }
+    body[data-warna="biru"]   { --aksen: #60a5fa; }
+    body[data-warna="pink"]   { --aksen: #f472b6; }
+  }
+  body[data-warna] { --tint: 16%; }            /* sedang mencari warna */
+  body[data-warna].didapat { --tint: 30%; }    /* warna sudah didapat (Y7 ON) */
+
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px; color: var(--text);
+         background: color-mix(in srgb, var(--aksen) var(--tint), var(--bg));
+         transition: background .4s;
+         font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { display: flex; align-items: center; justify-content: space-between;
+           max-width: 960px; margin: 0 auto 20px; flex-wrap: wrap; gap: 8px; }
+  body[data-warna] header { border-bottom: 4px solid var(--aksen); padding-bottom: 12px; }
+  h1 { font-size: 1.3rem; margin: 0; }
+  .badge { background: var(--aksen); color: #fff; font-size: .85rem; font-weight: 700;
+           padding: 4px 12px; border-radius: 999px; }
+  .badge:empty { display: none; }
+  body[data-warna="kuning"] .badge { color: #1b1f24; }
+  .conn { font-size: .85rem; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--off); }
+  .dot.ok { background: var(--on); }
+  .grid { max-width: 960px; margin: 0 auto; display: grid; gap: 12px;
+          grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+          padding: 16px; transition: background .3s, border-color .3s; }
+  .card.on { background: color-mix(in srgb, var(--aksen) 16%, var(--card)); border-color: var(--aksen); }
+  .nama { font-weight: 600; }
+  .alamat { font-size: .78rem; color: var(--muted); margin-bottom: 10px; }
+  .status { font-size: 1.5rem; font-weight: 700; color: var(--off); }
+  .card.on .status { color: var(--aksen); }
+  .info { margin-top: 8px; font-size: .78rem; color: var(--muted); min-height: 1.1em; }
+  .panel { max-width: 960px; margin: 0 auto 16px; background: var(--card);
+           border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+  .panel h2 { font-size: 1rem; margin: 0 0 10px; }
+  .btns { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+  .btns button { padding: 10px; border-radius: 8px; border: 1px solid var(--border);
+                 background: var(--bg); color: var(--text); font-size: .9rem; cursor: pointer;
+                 transition: background .2s, border-color .2s; }
+  .btns button:hover { border-color: var(--aksen); }
+  .btns button:active { background: color-mix(in srgb, var(--aksen) 20%, var(--bg)); }
+  .btns button.reset { color: #dc2626; }
+  /* tombol warna: garis tepi sesuai warna; terisi penuh saat sedang aktif */
+  .btns button[data-warna] { border-left: 4px solid var(--c); }
+  .btns button[data-warna]:hover { border-color: var(--c); }
+  .btns button[data-warna="merah"]  { --c: #dc2626; }
+  .btns button[data-warna="kuning"] { --c: #eab308; }
+  .btns button[data-warna="hijau"]  { --c: #16a34a; }
+  .btns button[data-warna="biru"]   { --c: #2563eb; }
+  .btns button[data-warna="pink"]   { --c: #ec4899; }
+  .btns button.aktif { background: var(--c); border-color: var(--c); color: #fff; font-weight: 600; }
+  .btns button[data-warna="kuning"].aktif { color: #1b1f24; }
+  #pesan { margin-top: 10px; font-size: .82rem; color: var(--muted); min-height: 1.1em; }
+  .hasil { max-width: 960px; margin: 0 auto 16px; display: grid; gap: 12px;
+           grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+  .hasil .card .status { font-size: 1.1rem; color: var(--text); }
+  .hasil .card.on .status { color: var(--aksen); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Monitor Robot PLC</h1>
+  <span class="badge" id="badge"></span>
+  <div class="conn"><span class="dot" id="dot"></span><span id="connText">Menghubungkan...</span></div>
+</header>
+<div class="panel">
+  <h2>Kontrol Robot</h2>
+  <div class="btns" id="btns"></div>
+  <div id="pesan"></div>
+</div>
+<div class="hasil">
+  <div class="card" id="cBaut"><div class="nama">Baut (ada / tidak ada + total)</div><div class="status" id="hBaut">-</div></div>
+  <div class="card" id="cWarna"><div class="nama">Warna</div><div class="status" id="hWarna">-</div></div>
+</div>
+<div class="grid" id="grid"></div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyCawIEZa1grnXMJ--Pq09aePfg9wZdYb78",
+    authDomain: "rekinsa-iot.firebaseapp.com",
+    databaseURL: "https://rekinsa-iot-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "rekinsa-iot",
+    storageBucket: "rekinsa-iot.firebasestorage.app",
+    messagingSenderId: "409121918202",
+    appId: "1:409121918202:web:3d23b9aca3bd27f0becd43"
+  };
+
+  // key = nama node di Firebase, tipe: "pulsa" (start/stop) atau "mode" (ditahan)
+  // M6/Y006 = Total Baut (baut ada/tidak ada + jumlah jadi satu), M7/Y007 = Warna Didapat (otomatis)
+  const NODE = [
+    { key: "autoOn",     label: "Auto ON",        alamat: "M0 / Y000", tipe: "mode" },
+    { key: "start",      label: "START",          alamat: "M1 / Y001", tipe: "pulsa" },
+    { key: "stop",       label: "STOP",           alamat: "M2 / Y002", tipe: "pulsa" },
+    { key: "photo",      label: "Photo",          alamat: "M3 / Y003", tipe: "mode" },
+    { key: "video",      label: "Video",          alamat: "M4 / Y004", tipe: "mode" },
+    { key: "warna",      label: "Pilih Warna",    alamat: "M5 / Y005", tipe: "mode" },
+    { key: "totalBaut",  label: "Total Baut",     alamat: "M6 / Y006", tipe: "mode" },
+    { key: "warnaDapat", label: "Warna Didapat",  alamat: "M7 / Y007", tipe: "mode" }
+  ];
+
+  const WARNA_VALID = ["merah", "kuning", "hijau", "biru", "pink"];
+
+  const grid = document.getElementById("grid");
+  const el = {};
+  const hitung = {};
+  const terakhirNilai = {};
+
+  NODE.forEach(n => {
+    const d = document.createElement("div");
+    d.className = "card";
+    d.innerHTML = `<div class="nama">${n.label}</div>
+                   <div class="alamat">${n.alamat}</div>
+                   <div class="status">OFF</div>
+                   <div class="info"></div>`;
+    grid.appendChild(d);
+    el[n.key] = d;
+    hitung[n.key] = 0;
+  });
+
+  function jam() {
+    return new Date().toLocaleTimeString("id-ID");
+  }
+
+  const db = getDatabase(initializeApp(firebaseConfig));
+
+  const TOMBOL = [
+    ["autoOn", "Auto ON"], ["autoOff", "Auto OFF"], ["start", "START"], ["stop", "STOP"],
+    ["photo", "Photo"], ["video", "Video"],
+    ["warna:merah", "Cari Merah"], ["warna:kuning", "Cari Kuning"], ["warna:hijau", "Cari Hijau"],
+    ["warna:biru", "Cari Biru"], ["warna:pink", "Cari Pink"], ["warnaBatal", "Batal Warna"],
+    ["totalBaut", "Total Baut"], ["warnaDapat", "Tes Y7"], ["reset", "Reset Semua"]
+  ];
+  let robot = {}, hasil = {};
+
+  // Warna dominan halaman: aktif saat robot sedang mencari warna (M5 ON) atau warna sudah didapat (Y7 ON).
+  // Setelah dibatalkan / reset / ganti mode, halaman kembali ke tampilan normal.
+  function hitungAksen(robot, hasil) {
+    const target = hasil.warna_target;
+    const valid = WARNA_VALID.includes(target);
+    const dapat = hasil.warna_dapat === true || robot.warnaDapat === 1;
+    const mencari = robot.warna === 1;
+    return { aktif: valid && (mencari || dapat) ? target : null, dapat: dapat, mencari: mencari };
+  }
+
+  function render() {
+    // Baut: satu kartu untuk ada/tidak ada dan total baut (aktif saat mode Total Baut ON)
+    let b = "Mode tidak aktif";
+    if (robot.totalBaut === 1) {
+      if (hasil.baut_status === "ada") {
+        b = `Ada baut - ${hasil.total_baut != null ? hasil.total_baut : "?"} baut`;
+      } else if (hasil.baut_status === "tidak ada") {
+        b = "Tidak ada baut";
+      } else if (hasil.baut_status === "gagal baca") {
+        b = "Gagal membaca (Gemini)";
+      } else {
+        b = "Mendeteksi...";
+      }
+    }
+    document.getElementById("hBaut").textContent = b;
+    document.getElementById("cBaut").classList.toggle("on", robot.totalBaut === 1 && hasil.baut_status === "ada");
+
+    // Warna: status pencarian, dan penanda Y7 saat warna yang diminta sudah didapat
+    let w = "-";
+    if (hasil.warna_dapat === true) {
+      w = `Warna didapat: ${hasil.warna_target || "-"} (Y7 ON)`;
+    } else if (hasil.warna_status) {
+      w = `${hasil.warna_status} (target: ${hasil.warna_target || "-"}, terlihat: ${hasil.warna_terdeteksi || "-"})`;
+    }
+    document.getElementById("hWarna").textContent = w;
+    document.getElementById("cWarna").classList.toggle("on", hasil.warna_dapat === true);
+
+    // Efek warna: seluruh halaman ikut warna yang dicari
+    const a = hitungAksen(robot, hasil);
+    if (a.aktif) { document.body.dataset.warna = a.aktif; } else { delete document.body.dataset.warna; }
+    document.body.classList.toggle("didapat", !!a.aktif && a.dapat);
+    document.getElementById("badge").textContent =
+      a.aktif ? (a.dapat ? `Warna didapat: ${a.aktif}` : `Mencari: ${a.aktif}`) : (a.dapat ? "Y7 ON" : "");
+    document.querySelectorAll(".btns button[data-warna]").forEach(btn => {
+      btn.classList.toggle("aktif", btn.dataset.warna === a.aktif);
+    });
+  }
+  onValue(ref(db, "hasil"), snap => { hasil = snap.val() || {}; render(); });
+
+  const btns = document.getElementById("btns");
+  const pesan = document.getElementById("pesan");
+
+  async function kirimPerintah(cmd, label) {
+    try {
+      await set(ref(db, "perintah"), { cmd: cmd, t: Date.now() });
+      pesan.textContent = `Perintah ${label} terkirim pukul ${jam()}`;
+    } catch (e) {
+      pesan.textContent = "Gagal mengirim: " + e.message;
+    }
+  }
+
+  TOMBOL.forEach(([cmd, label]) => {
+    const b = document.createElement("button");
+    b.textContent = label;
+    if (cmd === "reset") b.className = "reset";
+    if (cmd.startsWith("warna:")) b.dataset.warna = cmd.split(":")[1];
+    b.addEventListener("click", () => kirimPerintah(cmd, label));
+    btns.appendChild(b);
+  });
+
+  onValue(ref(db, ".info/connected"), snap => {
+    const ok = snap.val() === true;
+    document.getElementById("dot").classList.toggle("ok", ok);
+    document.getElementById("connText").textContent = ok ? "Terhubung ke Firebase" : "Terputus";
+  });
+
+  onValue(ref(db, "robot"), snap => {
+    const data = snap.val() || {};
+    robot = data; render();
+    NODE.forEach(n => {
+      const v = data[n.key] === 1 ? 1 : 0;
+      const card = el[n.key];
+      card.classList.toggle("on", v === 1);
+      card.querySelector(".status").textContent = v === 1 ? "ON" : "OFF";
+      const info = card.querySelector(".info");
+
+      // Hitung berapa kali pulsa (0 -> 1) sejak halaman dibuka
+      if (n.tipe === "pulsa" && v === 1 && terakhirNilai[n.key] !== 1) {
+        hitung[n.key]++;
+        info.textContent = `Pulsa ke-${hitung[n.key]} pukul ${jam()}`;
+      } else if (n.tipe === "mode" && terakhirNilai[n.key] !== undefined && terakhirNilai[n.key] !== v) {
+        info.textContent = `Berubah ke ${v ? "ON" : "OFF"} pukul ${jam()}`;
+      }
+      terakhirNilai[n.key] = v;
+    });
+  });
+</script>
+</body>
+</html>
